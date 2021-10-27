@@ -1,6 +1,6 @@
 #include "Endpoint.hpp"
-
 #include <iostream>
+#include <string>
 
 using namespace Prog3::Api;
 using namespace Prog3::Core;

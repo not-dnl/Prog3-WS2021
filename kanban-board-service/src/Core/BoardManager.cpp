@@ -1,5 +1,7 @@
 #include "BoardManager.hpp"
+#include "crow/logging.h"
 #include <iostream>
+#include <optional>
 
 using namespace Prog3::Core;
 using namespace Prog3::Core::Model;
@@ -37,10 +39,9 @@ std::string BoardManager::getColumn(int columnId) {
 }
 
 std::string BoardManager::postColumn(std::string request) {
-
     int const dummyId = -1;
     std::optional<Column> parsedColumnOptional = parser.convertColumnToModel(dummyId, request);
-    if (false == parsedColumnOptional.has_value()) {
+    if (!parsedColumnOptional.has_value()) {
         return parser.getEmptyResponseString();
     }
 

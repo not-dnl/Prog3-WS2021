@@ -2,6 +2,8 @@
 
 #include "JsonParser.hpp"
 #include "Core/Exception/NotImplementedException.hpp"
+#include "crow/logging.h"
+#include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
@@ -16,7 +18,26 @@ string JsonParser::convertToApiString(Board &board) {
 }
 
 string JsonParser::convertToApiString(Column &column) {
-    throw NotImplementedException();
+    Document doc;
+    doc.SetObject();
+    doc.AddMember("id", column.getId(), doc.GetAllocator());
+
+    Value nameValue(kStringType);
+    nameValue.SetString(column.getName().c_str(), doc.GetAllocator());
+    doc.AddMember("name", nameValue, doc.GetAllocator());
+
+    doc.AddMember("position", column.getPos(), doc.GetAllocator());
+
+    Value itemArray(kArrayType);
+    doc.AddMember("items", itemArray, doc.GetAllocator());
+
+    StringBuffer sb;
+    sb.Clear();
+
+    PrettyWriter<StringBuffer> writer(sb);
+    doc.Accept(writer);
+
+    return string(sb.GetString());
 }
 
 string JsonParser::convertToApiString(std::vector<Column> &columns) {
@@ -32,7 +53,20 @@ string JsonParser::convertToApiString(std::vector<Item> &items) {
 }
 
 std::optional<Column> JsonParser::convertColumnToModel(int columnId, std::string &request) {
-    throw NotImplementedException();
+    if (request.empty())
+        return {};
+
+    Document doc;
+    doc.Parse(request.c_str());
+
+    if (doc.HasMember("name") && doc.HasMember("position")) {
+        auto name = doc["name"].GetString();
+        auto pos = doc["position"].GetInt();
+
+        return Column{columnId, name, pos};
+    }
+
+    return {};
 }
 
 std::optional<Item> JsonParser::convertItemToModel(int itemId, std::string &request) {

@@ -1,5 +1,6 @@
 #include "BoardRepository.hpp"
 #include "Core/Exception/NotImplementedException.hpp"
+#include "crow/logging.h"
 #include <filesystem>
 #include <string.h>
 
@@ -61,7 +62,7 @@ void BoardRepository::initialize() {
     handleSQLError(result, errorMessage);
 
     // only if dummy data is needed ;)
-    //createDummyData();
+    // createDummyData();
 }
 
 Board BoardRepository::getBoard() {
@@ -77,7 +78,35 @@ std::optional<Column> BoardRepository::getColumn(int id) {
 }
 
 std::optional<Column> BoardRepository::postColumn(std::string name, int position) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlInsertColumn =
+        "insert into column (name, position)"
+        "values ('" +
+        name + "', " + std::to_string(position) + ");";
+
+    result = sqlite3_exec(database, sqlInsertColumn.c_str(), NULL, 0, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    string sqlLastInsertRowId = "select last_insert_rowid();";
+    int lastRowId;
+
+    result = sqlite3_exec(database, sqlLastInsertRowId.c_str(), postColumnCallback0, &lastRowId, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    string sqlGetCurrentId =
+        "select * from column "
+        "where rowid = " +
+        std::to_string(lastRowId) + ";";
+    int currentId;
+
+    result = sqlite3_exec(database, sqlGetCurrentId.c_str(), postColumnCallback1, &currentId, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    Column c = {currentId, name, position};
+
+    return c;
 }
 
 std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std::string name, int position) {
@@ -144,11 +173,18 @@ void BoardRepository::createDummyData() {
     handleSQLError(result, errorMessage);
 }
 
-/*
-  I know source code comments are bad, but this one is to guide you through the use of sqlite3_exec() in case you want to use it.
-  sqlite3_exec takes a "Callback function" as one of its arguments, and since there are many crazy approaches in the wild internet,
-  I want to show you how the signature of this "callback function" may look like in order to work with sqlite3_exec()
-*/
-int BoardRepository::queryCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+int BoardRepository::postColumnCallback0(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    int &lastRowId = *static_cast<int *>(data);
+
+    lastRowId = stoi(*fieldValues);
+
+    return 0;
+}
+
+int BoardRepository::postColumnCallback1(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    int &currentId = *static_cast<int *>(data);
+
+    currentId = stoi(*fieldValues);
+
     return 0;
 }
