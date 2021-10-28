@@ -92,7 +92,7 @@ std::optional<Column> BoardRepository::postColumn(std::string name, int position
     string sqlLastInsertRowId = "select last_insert_rowid();";
     int lastRowId;
 
-    result = sqlite3_exec(database, sqlLastInsertRowId.c_str(), postColumnCallback0, &lastRowId, &errorMessage);
+    result = sqlite3_exec(database, sqlLastInsertRowId.c_str(), callback0, &lastRowId, &errorMessage);
     handleSQLError(result, errorMessage);
 
     string sqlGetCurrentId =
@@ -101,12 +101,10 @@ std::optional<Column> BoardRepository::postColumn(std::string name, int position
         std::to_string(lastRowId) + ";";
     int currentId;
 
-    result = sqlite3_exec(database, sqlGetCurrentId.c_str(), postColumnCallback1, &currentId, &errorMessage);
+    result = sqlite3_exec(database, sqlGetCurrentId.c_str(), callback0, &currentId, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    Column c = {currentId, name, position};
-
-    return c;
+    return Column{currentId, name, position};
 }
 
 std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std::string name, int position) {
@@ -126,7 +124,38 @@ std::optional<Item> BoardRepository::getItem(int columnId, int itemId) {
 }
 
 std::optional<Item> BoardRepository::postItem(int columnId, std::string title, int position) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    time_t ttime = time(0);
+    char *timestamp = ctime(&ttime);
+    timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
+
+    string sqlInsertItem =
+        "insert into item (title, date, position, column_id)"
+        "values ('" +
+        title + "', '" + std::string(timestamp) +
+        "', " + std::to_string(position) + ", " + std::to_string(columnId) + ");";
+
+    result = sqlite3_exec(database, sqlInsertItem.c_str(), NULL, 0, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    string sqlLastInsertRowId = "select last_insert_rowid();";
+    int lastRowId;
+
+    result = sqlite3_exec(database, sqlLastInsertRowId.c_str(), callback0, &lastRowId, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    string sqlGetCurrentId =
+        "select * from item "
+        "where rowid = " +
+        std::to_string(lastRowId) + ";";
+    int currentId;
+
+    result = sqlite3_exec(database, sqlGetCurrentId.c_str(), callback0, &currentId, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    return Item{currentId, title, position, timestamp};
 }
 
 std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, int itemId, std::string title, int position) {
@@ -173,18 +202,10 @@ void BoardRepository::createDummyData() {
     handleSQLError(result, errorMessage);
 }
 
-int BoardRepository::postColumnCallback0(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+int BoardRepository::callback0(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
     int &lastRowId = *static_cast<int *>(data);
 
     lastRowId = stoi(*fieldValues);
-
-    return 0;
-}
-
-int BoardRepository::postColumnCallback1(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
-    int &currentId = *static_cast<int *>(data);
-
-    currentId = stoi(*fieldValues);
 
     return 0;
 }

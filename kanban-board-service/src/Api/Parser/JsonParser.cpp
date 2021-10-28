@@ -45,7 +45,27 @@ string JsonParser::convertToApiString(std::vector<Column> &columns) {
 }
 
 string JsonParser::convertToApiString(Item &item) {
-    throw NotImplementedException();
+    Document doc;
+    doc.SetObject();
+    doc.AddMember("id", item.getId(), doc.GetAllocator());
+
+    Value titleValue(kStringType);
+    titleValue.SetString(item.getTitle().c_str(), doc.GetAllocator());
+    doc.AddMember("title", titleValue, doc.GetAllocator());
+
+    doc.AddMember("position", item.getPos(), doc.GetAllocator());
+
+    Value timestampValue(kStringType);
+    timestampValue.SetString(item.getTimestamp().c_str(), doc.GetAllocator());
+    doc.AddMember("timestamp", timestampValue, doc.GetAllocator());
+
+    StringBuffer sb;
+    sb.Clear();
+
+    PrettyWriter<StringBuffer> writer(sb);
+    doc.Accept(writer);
+
+    return string(sb.GetString());
 }
 
 string JsonParser::convertToApiString(std::vector<Item> &items) {
@@ -70,5 +90,22 @@ std::optional<Column> JsonParser::convertColumnToModel(int columnId, std::string
 }
 
 std::optional<Item> JsonParser::convertItemToModel(int itemId, std::string &request) {
-    throw NotImplementedException();
+    if (request.empty())
+        return {};
+
+    Document doc;
+    doc.Parse(request.c_str());
+
+    if (doc.HasMember("title") && doc.HasMember("position")) {
+        auto title = doc["title"].GetString();
+        auto pos = doc["position"].GetInt();
+
+        time_t ttime = time(0);
+        char *timestamp = ctime(&ttime);
+        timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
+
+        return Item{itemId, title, pos, timestamp};
+    }
+
+    return {};
 }

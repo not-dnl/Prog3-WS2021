@@ -95,7 +95,6 @@ std::string BoardManager::getItem(int columnId, int itemId) {
 }
 
 std::string BoardManager::postItem(int columnId, std::string request) {
-
     int const dummyId = -1;
     std::optional parsedItemOptional = parser.convertItemToModel(dummyId, request);
     if (false == parsedItemOptional.has_value()) {
