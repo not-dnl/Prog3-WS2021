@@ -13,31 +13,71 @@ using namespace Prog3::Core::Exception;
 using namespace rapidjson;
 using namespace std;
 
+bool JsonParser::isValidColumn(rapidjson::Document const &document) {
+    if (document.HasParseError() || !document["name"].IsString() || !document["position"].IsInt()) {
+        return false;
+    }
+
+    return true;
+}
+
+bool JsonParser::isValidItem(rapidjson::Document const &document) {
+    if (document.HasParseError() || !document["title"].IsString() || !document["position"].IsInt()) {
+        return false;
+    }
+
+    return true;
+}
+
+rapidjson::Value JsonParser::getJsonValueFromModel(Column const &column, rapidjson::Document::AllocatorType &allocator) {
+    Value jsonColumn(kObjectType);
+
+    jsonColumn.AddMember("id", column.getId(), allocator);
+    jsonColumn.AddMember("name", Value(column.getName().c_str(), allocator), allocator);
+    jsonColumn.AddMember("position", column.getPos(), allocator);
+
+    Value jsonItems(kArrayType);
+
+    for (auto &item : column.getItems()) {
+        Value jsonItem = getJsonValueFromModel(item, allocator);
+        jsonItems.PushBack(jsonItem, allocator);
+    }
+
+    jsonColumn.AddMember("items", jsonItems, allocator);
+
+    return jsonColumn;
+}
+
+rapidjson::Value JsonParser::getJsonValueFromModel(Item const &item, rapidjson::Document::AllocatorType &allocator) {
+    Value jsonItem(kObjectType);
+
+    jsonItem.AddMember("id", item.getId(), allocator);
+    jsonItem.AddMember("title", Value(item.getTitle().c_str(), allocator), allocator);
+    jsonItem.AddMember("position", item.getPos(), allocator);
+    jsonItem.AddMember("timestamp", Value(item.getTimestamp().c_str(), allocator), allocator);
+
+    return jsonItem;
+}
+
+string JsonParser::jsonValueToString(rapidjson::Value const &json) {
+    StringBuffer buffer;
+    Writer<StringBuffer> writer(buffer);
+
+    json.Accept(writer);
+
+    return buffer.GetString();
+}
+
 string JsonParser::convertToApiString(Board &board) {
     throw NotImplementedException();
 }
 
 string JsonParser::convertToApiString(Column &column) {
-    Document doc;
-    doc.SetObject();
-    doc.AddMember("id", column.getId(), doc.GetAllocator());
+    Document document(kObjectType);
 
-    Value nameValue(kStringType);
-    nameValue.SetString(column.getName().c_str(), doc.GetAllocator());
-    doc.AddMember("name", nameValue, doc.GetAllocator());
+    Value jsonColumn = getJsonValueFromModel(column, document.GetAllocator());
 
-    doc.AddMember("position", column.getPos(), doc.GetAllocator());
-
-    Value itemArray(kArrayType);
-    doc.AddMember("items", itemArray, doc.GetAllocator());
-
-    StringBuffer sb;
-    sb.Clear();
-
-    PrettyWriter<StringBuffer> writer(sb);
-    doc.Accept(writer);
-
-    return string(sb.GetString());
+    return jsonValueToString(jsonColumn);
 }
 
 string JsonParser::convertToApiString(std::vector<Column> &columns) {
@@ -45,27 +85,11 @@ string JsonParser::convertToApiString(std::vector<Column> &columns) {
 }
 
 string JsonParser::convertToApiString(Item &item) {
-    Document doc;
-    doc.SetObject();
-    doc.AddMember("id", item.getId(), doc.GetAllocator());
+    Document document(kObjectType);
 
-    Value titleValue(kStringType);
-    titleValue.SetString(item.getTitle().c_str(), doc.GetAllocator());
-    doc.AddMember("title", titleValue, doc.GetAllocator());
+    Value jsonItem = getJsonValueFromModel(item, document.GetAllocator());
 
-    doc.AddMember("position", item.getPos(), doc.GetAllocator());
-
-    Value timestampValue(kStringType);
-    timestampValue.SetString(item.getTimestamp().c_str(), doc.GetAllocator());
-    doc.AddMember("timestamp", timestampValue, doc.GetAllocator());
-
-    StringBuffer sb;
-    sb.Clear();
-
-    PrettyWriter<StringBuffer> writer(sb);
-    doc.Accept(writer);
-
-    return string(sb.GetString());
+    return jsonValueToString(jsonItem);
 }
 
 string JsonParser::convertToApiString(std::vector<Item> &items) {
@@ -73,38 +97,23 @@ string JsonParser::convertToApiString(std::vector<Item> &items) {
 }
 
 std::optional<Column> JsonParser::convertColumnToModel(int columnId, std::string &request) {
-    if (request.empty())
-        return {};
+    Document document;
+    document.Parse(request.c_str());
 
-    Document doc;
-    doc.Parse(request.c_str());
-
-    if (doc.HasMember("name") && doc.HasMember("position")) {
-        auto name = doc["name"].GetString();
-        auto pos = doc["position"].GetInt();
-
-        return Column{columnId, name, pos};
+    if (isValidColumn(document)) {
+        return Column(columnId, document["name"].GetString(), document["position"].GetInt());
     }
 
     return {};
 }
 
 std::optional<Item> JsonParser::convertItemToModel(int itemId, std::string &request) {
-    if (request.empty())
-        return {};
+    Document document;
+    document.Parse(request.c_str());
 
-    Document doc;
-    doc.Parse(request.c_str());
-
-    if (doc.HasMember("title") && doc.HasMember("position")) {
-        auto title = doc["title"].GetString();
-        auto pos = doc["position"].GetInt();
-
-        time_t ttime = time(0);
-        char *timestamp = ctime(&ttime);
-        timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
-
-        return Item{itemId, title, pos, timestamp};
+    if (isValidItem(document)) {
+        // we don't care about the timestamp here
+        return Item(itemId, document["title"].GetString(), document["position"].GetInt(), "");
     }
 
     return {};
