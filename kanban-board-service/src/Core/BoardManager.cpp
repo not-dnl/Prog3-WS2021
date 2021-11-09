@@ -60,7 +60,7 @@ std::string BoardManager::putColumn(int columnId, std::string request) {
 
     std::optional<Column> parsedColumnOptional = parser.convertColumnToModel(columnId, request);
 
-    if (false == parsedColumnOptional.has_value()) {
+    if (!parsedColumnOptional.has_value()) {
         return parser.getEmptyResponseString();
     }
     Column column = parsedColumnOptional.value();
@@ -113,7 +113,7 @@ std::string BoardManager::postItem(int columnId, std::string request) {
 std::string BoardManager::putItem(int columnId, int itemId, std::string request) {
 
     std::optional parsedItemOptional = parser.convertItemToModel(itemId, request);
-    if (false == parsedItemOptional.has_value()) {
+    if (!parsedItemOptional.has_value()) {
         return parser.getEmptyResponseString();
     }
 

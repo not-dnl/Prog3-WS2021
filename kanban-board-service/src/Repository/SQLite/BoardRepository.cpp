@@ -99,7 +99,25 @@ std::optional<Column> BoardRepository::postColumn(std::string name, int position
 }
 
 std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std::string name, int position) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlPutColumn = "update column "
+                          "set name = '" +
+                          name + "', position = " + std::to_string(position) +
+                          " where id = " + std::to_string(id);
+
+    // nothing bad happens when the id doesn't exist, might be bad for the front-end
+    // but the doc doesn't say anything about error handling
+    result = sqlite3_exec(database, sqlPutColumn.c_str(), NULL, 0, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    // constraints etc. are handled by SQL errors tho
+    if (result == SQLITE_OK) {
+        return Column(id, name, position);
+    }
+
+    return {};
 }
 
 void BoardRepository::deleteColumn(int id) {
@@ -150,7 +168,30 @@ std::optional<Item> BoardRepository::postItem(int columnId, std::string title, i
 }
 
 std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, int itemId, std::string title, int position) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    time_t ttime = time(0);
+    char *timestamp = ctime(&ttime);
+    timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
+
+    string sqlPutItem = "update item "
+                        "set title = '" +
+                        title + "', position = " + std::to_string(position) +
+                        ", date = '" + std::string(timestamp) +
+                        "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
+
+    // nothing bad happens when the ids don't exist, might be bad for the front-end
+    // but the doc doesn't say anything about error handling
+    result = sqlite3_exec(database, sqlPutItem.c_str(), NULL, 0, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    // constraints etc. are handled by SQL errors tho
+    if (result == SQLITE_OK) {
+        return Item(itemId, title, position, timestamp);
+    }
+
+    return {};
 }
 
 void BoardRepository::deleteItem(int columnId, int itemId) {
