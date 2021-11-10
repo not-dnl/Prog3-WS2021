@@ -214,6 +214,20 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
     int result = 0;
     char *errorMessage = nullptr;
 
+    string sqlSelectItem = "select * from item "
+                           "where id = " +
+                           std::to_string(itemId) +
+                           " and column_id = " + std::to_string(columnId);
+    std::string callback;
+
+    result = sqlite3_exec(database, sqlSelectItem.c_str(), callback_fn, &callback, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    // the item doesn't exist
+    if (callback.empty()) {
+        return {};
+    }
+
     time_t ttime = time(0);
     char *timestamp = ctime(&ttime);
     timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
@@ -224,12 +238,11 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
                         ", date = '" + std::string(timestamp) +
                         "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
 
-    // nothing bad happens when the ids don't exist, might be bad for the front-end
-    // but the doc doesn't say anything about error handling
+    // if we got here, the item exists and it's time to update it.
     result = sqlite3_exec(database, sqlPutItem.c_str(), NULL, 0, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    // constraints etc. are handled by SQL errors tho
+    // everything went alright.
     if (result == SQLITE_OK) {
         return Item(itemId, title, position, timestamp);
     }
