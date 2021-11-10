@@ -19,7 +19,7 @@ class BoardRepository : public RepositoryIf {
         return id != INVALID_ID;
     }
 
-    static int callback0(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
+    static int callback_fn(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
 
   public:
     BoardRepository();
