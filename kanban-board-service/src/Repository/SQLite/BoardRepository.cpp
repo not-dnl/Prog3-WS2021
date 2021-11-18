@@ -106,41 +106,21 @@ std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std
     char *errorMessage = nullptr;
 
     string sqlSelectColumn = "select * from column where id = " + to_string(id);
-    string columns;
+    int amount = 0;
 
-    result = sqlite3_exec(database, sqlSelectColumn.c_str(), callback_fn, &columns, &errorMessage);
+    result = sqlite3_exec(database, sqlSelectColumn.c_str(), selectAmountCallback, &amount, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    // we didn't get a response, the column doesn't exist.
-    if (columns.empty()) {
+    // we didn't get any rows back so the column doesn't exist.
+    if (amount == 0) {
         return {};
     }
 
     string sqlSelectItems = "select * from item where column_id = " + to_string(id); // get all items of the column
-    string items = "[";
 
-    result = sqlite3_exec(database, sqlSelectItems.c_str(), callback_fn, &items, &errorMessage);
+    Column column;
+    result = sqlite3_exec(database, sqlSelectItems.c_str(), columnCallback, &column, &errorMessage); // items get added in the callback.
     handleSQLError(result, errorMessage);
-
-    if (items.size() > 1) // the string is > 1 when the column has items/the callback returned the json string
-        items.pop_back(); // if that happens, remove the last ','
-    items += "]";         // we now have a valid json string, with items if available...
-
-    Document document;
-    document.Parse(items.c_str()); // don't think I need error handling here, since the data from the db should be fine
-
-    std::vector<Item> tempItems;
-    // iterate the json object and save the items in a vector.
-    for (auto i = 0; i < document.Size(); i++) {
-        // they're all saved as strings
-        auto id = document[i]["id"].GetString();
-        auto title = document[i]["title"].GetString();
-        auto date = document[i]["date"].GetString();
-        auto position = document[i]["position"].GetString();
-
-        // so we convert them here
-        tempItems.push_back(Item(stoi(id), title, stoi(position), date));
-    }
 
     string sqlUpdateColumn = "update column "
                              "set name = '" +
@@ -151,13 +131,13 @@ std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std
     result = sqlite3_exec(database, sqlUpdateColumn.c_str(), NULL, 0, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    // if everything went well we add our items to the column and return that.
+    // if everything went well we set the new id etc. and return that.
     if (result == SQLITE_OK) {
-        auto c = Column(id, name, position);
-        for (auto &item : tempItems)
-            c.addItem(item);
+        column.setID(id);
+        column.setName(name);
+        column.setPos(position);
 
-        return c;
+        return column;
     }
 
     return {};
@@ -218,24 +198,19 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
                            "where id = " +
                            std::to_string(itemId) +
                            " and column_id = " + std::to_string(columnId);
-    std::string callback;
 
-    result = sqlite3_exec(database, sqlSelectItem.c_str(), callback_fn, &callback, &errorMessage);
+    Item item; // default constructor sets id to -1
+    result = sqlite3_exec(database, sqlSelectItem.c_str(), itemCallback, &item, &errorMessage);
     handleSQLError(result, errorMessage);
 
     // the item doesn't exist
-    if (callback.empty()) {
+    if (item.getId() == -1) {
         return {};
     }
-
-    time_t ttime = time(0);
-    char *timestamp = ctime(&ttime);
-    timestamp[strlen(timestamp) - 1] = '\0'; // "remove" newline char
 
     string sqlPutItem = "update item "
                         "set title = '" +
                         title + "', position = " + std::to_string(position) +
-                        ", date = '" + std::string(timestamp) +
                         "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
 
     // if we got here, the item exists and it's time to update it.
@@ -244,7 +219,7 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
 
     // everything went alright.
     if (result == SQLITE_OK) {
-        return Item(itemId, title, position, timestamp);
+        return Item(itemId, title, position, item.getTimestamp()); // use the old timestamp.
     }
 
     return {};
@@ -301,23 +276,38 @@ void BoardRepository::createDummyData() {
     handleSQLError(result, errorMessage);
 }
 
-// the callback builds a json array with all columns that were returned.
-int BoardRepository::callback_fn(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+int BoardRepository::itemCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
     if (data) {
-        auto &return_value = *static_cast<std::string *>(data);
+        auto item = static_cast<Item *>(data);
 
-        return_value += "{";
-
-        for (int i = 0; i < numberOfColumns; ++i) {
-            return_value += "\"" + std::string(columnNames[i]) + "\": ";
-            return_value += "\"" + std::string(fieldValues[i]) + "\"";
-
-            if (i != numberOfColumns - 1)
-                return_value += ",";
-        }
-
-        return_value += "},";
+        item->setID(stoi(fieldValues[0]));
+        item->setTitle(fieldValues[1]);
+        item->setTimestamp(fieldValues[2]);
+        item->setPos(stoi(fieldValues[3]));
     }
+
+    return 0;
+}
+
+int BoardRepository::columnCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    if (data) {
+        auto column = static_cast<Column *>(data);
+
+        Item item = {
+            stoi(fieldValues[0]),
+            fieldValues[1],
+            stoi(fieldValues[3]),
+            fieldValues[2]};
+
+        column->addItem(item);
+    }
+
+    return 0;
+}
+
+int BoardRepository::selectAmountCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    int *c = static_cast<int *>(data);
+    *c = atoi(fieldValues[0]);
 
     return 0;
 }
