@@ -210,7 +210,7 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
 
     string sqlPutItem = "update item "
                         "set title = '" +
-                        title + "', position = " + std::to_string(position) +
+                        title + "', position = '" + std::to_string(position) +
                         "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
 
     // if we got here, the item exists and it's time to update it.
