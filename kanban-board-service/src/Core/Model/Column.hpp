@@ -12,6 +12,7 @@ namespace Model {
 
 class Column {
   public:
+    Column() = default;
     Column(int id, std::string givenName, int givenPosition);
     ~Column(){};
 

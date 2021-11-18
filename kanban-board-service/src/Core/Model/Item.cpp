@@ -2,6 +2,9 @@
 
 using namespace Prog3::Core::Model;
 
+Item::Item()
+    : id(-1) {}
+
 Item::Item(int id, std::string givenTitle, int givenPosition, std::string givenTimestamp)
     : id(id), title(givenTitle), position(givenPosition), timestamp(givenTimestamp) {}
 

@@ -8,6 +8,7 @@ namespace Model {
 
 class Item {
   public:
+    Item();
     Item(int id, std::string givenTitle, int givenPosition, std::string givenTimestamp);
     ~Item(){};
 
