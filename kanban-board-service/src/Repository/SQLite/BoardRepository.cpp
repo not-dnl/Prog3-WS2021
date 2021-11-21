@@ -253,15 +253,20 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
                         "set title = '" +
                         title + "', position = '" + std::to_string(position) +
                         "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
-    Item item;
 
-    result = sqlite3_exec(database, sqlPutItem.c_str(), itemCallback, &item, &errorMessage);
+    result = sqlite3_exec(database, sqlPutItem.c_str(), NULL, 0, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    if (result == SQLITE_OK && sqlite3_changes(database) == 1) {
-        return Item(itemId, title, position, ""); // do I need to get the old timestamp here?
-                                                  // it would require another select query...
-    }
+    string sqlSelectItem = "select id, title, position, date from item "
+                           "where column_id = " +
+                           std::to_string(columnId) + " and id = " + std::to_string(itemId);
+    Item item;
+
+    result = sqlite3_exec(database, sqlSelectItem.c_str(), itemCallback, &item, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    if (result == SQLITE_OK && sqlite3_changes(database) == 1 && item.getId() != -1)
+        return Item(itemId, title, position, item.getTimestamp());
 
     return {};
 }
@@ -344,7 +349,6 @@ int BoardRepository::itemCallback(void *data, int numberOfColumns, char **fieldV
         item->setID(stoi(fieldValues[0]));
         item->setTitle(fieldValues[1]);
         item->setTimestamp(fieldValues[3]);
-        cout << "hallo: " << fieldValues[3] << endl;
         item->setPos(stoi(fieldValues[2]));
     }
 
