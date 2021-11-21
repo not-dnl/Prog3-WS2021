@@ -19,9 +19,10 @@ class BoardRepository : public RepositoryIf {
         return id != INVALID_ID;
     }
 
+    static int allItemsCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
+    static int allColumnsCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
     static int itemCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
     static int columnCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
-    static int selectAmountCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames);
 
   public:
     BoardRepository();

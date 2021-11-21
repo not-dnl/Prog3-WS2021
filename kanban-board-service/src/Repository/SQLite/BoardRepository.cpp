@@ -70,15 +70,57 @@ void BoardRepository::initialize() {
 }
 
 Board BoardRepository::getBoard() {
-    throw NotImplementedException();
+    Board board("Kanban Board");
+    board.setColumns(getColumns());
+
+    return board;
 }
 
 std::vector<Column> BoardRepository::getColumns() {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlSelectColumns = "select * from column";
+    vector<Column> columns;
+
+    result = sqlite3_exec(database, sqlSelectColumns.c_str(), allColumnsCallback, &columns, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    if (result == SQLITE_OK && !columns.empty()) {
+        for (auto &c : columns) {
+            auto items = getItems(c.getId());
+            for (auto &i : items)
+                c.addItem(i);
+        }
+
+        return columns;
+    }
+
+    return {};
 }
 
 std::optional<Column> BoardRepository::getColumn(int id) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlSelectColumn = "select id, name, position from column"
+                             " where id = '" +
+                             std::to_string(id) + "'";
+    Column column;
+
+    result = sqlite3_exec(database, sqlSelectColumn.c_str(), columnCallback, &column, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    if (result == SQLITE_OK) {
+        if (column.getId() != -1) {
+            for (auto &i : getItems(id))
+                column.addItem(i);
+
+            return column;
+        }
+    }
+
+    return {};
 }
 
 std::optional<Column> BoardRepository::postColumn(std::string name, int position) {
@@ -95,6 +137,7 @@ std::optional<Column> BoardRepository::postColumn(std::string name, int position
 
     if (result == SQLITE_OK) {
         auto const columnId = sqlite3_last_insert_rowid(database);
+
         return Column(columnId, name, position);
     }
 
@@ -105,39 +148,22 @@ std::optional<Prog3::Core::Model::Column> BoardRepository::putColumn(int id, std
     int result = 0;
     char *errorMessage = nullptr;
 
-    string sqlSelectColumn = "select * from column where id = " + to_string(id);
-    int amount = 0;
-
-    result = sqlite3_exec(database, sqlSelectColumn.c_str(), selectAmountCallback, &amount, &errorMessage);
-    handleSQLError(result, errorMessage);
-
-    // we didn't get any rows back so the column doesn't exist.
-    if (amount == 0) {
-        return {};
-    }
-
-    string sqlSelectItems = "select * from item where column_id = " + to_string(id); // get all items of the column
-
-    Column column;
-    result = sqlite3_exec(database, sqlSelectItems.c_str(), columnCallback, &column, &errorMessage); // items get added in the callback.
-    handleSQLError(result, errorMessage);
-
     string sqlUpdateColumn = "update column "
                              "set name = '" +
                              name + "', position = " + std::to_string(position) +
                              " where id = " + std::to_string(id);
 
-    // time to update the column
     result = sqlite3_exec(database, sqlUpdateColumn.c_str(), NULL, 0, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    // if everything went well we set the new id etc. and return that.
     if (result == SQLITE_OK) {
-        column.setID(id);
-        column.setName(name);
-        column.setPos(position);
+        if (sqlite3_changes(database) == 1) {
+            Column column(id, name, position);
+            for (auto &i : getItems(id))
+                column.addItem(i);
 
-        return column;
+            return column;
+        }
     }
 
     return {};
@@ -158,11 +184,39 @@ void BoardRepository::deleteColumn(int id) {
 }
 
 std::vector<Item> BoardRepository::getItems(int columnId) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlSelectItems = "select id, title, position, date from item "
+                            "where column_id = " +
+                            std::to_string(columnId);
+    std::vector<Item> items;
+
+    result = sqlite3_exec(database, sqlSelectItems.c_str(), allItemsCallback, &items, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    if (!items.empty())
+        return items;
+
+    return {};
 }
 
 std::optional<Item> BoardRepository::getItem(int columnId, int itemId) {
-    throw NotImplementedException();
+    int result = 0;
+    char *errorMessage = nullptr;
+
+    string sqlSelectItem = "select id, title, position, date from item "
+                           "where column_id = " +
+                           std::to_string(columnId) + " and id = " + std::to_string(itemId);
+    Item item;
+
+    result = sqlite3_exec(database, sqlSelectItem.c_str(), itemCallback, &item, &errorMessage);
+    handleSQLError(result, errorMessage);
+
+    if (result == SQLITE_OK && item.getId() != -1)
+        return item;
+
+    return {};
 }
 
 std::optional<Item> BoardRepository::postItem(int columnId, std::string title, int position) {
@@ -184,6 +238,7 @@ std::optional<Item> BoardRepository::postItem(int columnId, std::string title, i
 
     if (result == SQLITE_OK) {
         auto const columnId = sqlite3_last_insert_rowid(database);
+
         return Item(columnId, title, position, timestamp);
     }
 
@@ -194,32 +249,18 @@ std::optional<Prog3::Core::Model::Item> BoardRepository::putItem(int columnId, i
     int result = 0;
     char *errorMessage = nullptr;
 
-    string sqlSelectItem = "select * from item "
-                           "where id = " +
-                           std::to_string(itemId) +
-                           " and column_id = " + std::to_string(columnId);
-
-    Item item; // default constructor sets id to -1
-    result = sqlite3_exec(database, sqlSelectItem.c_str(), itemCallback, &item, &errorMessage);
-    handleSQLError(result, errorMessage);
-
-    // the item doesn't exist
-    if (item.getId() == -1) {
-        return {};
-    }
-
     string sqlPutItem = "update item "
                         "set title = '" +
                         title + "', position = '" + std::to_string(position) +
                         "' where id = " + std::to_string(itemId) + " and column_id = " + std::to_string(columnId);
+    Item item;
 
-    // if we got here, the item exists and it's time to update it.
-    result = sqlite3_exec(database, sqlPutItem.c_str(), NULL, 0, &errorMessage);
+    result = sqlite3_exec(database, sqlPutItem.c_str(), itemCallback, &item, &errorMessage);
     handleSQLError(result, errorMessage);
 
-    // everything went alright.
-    if (result == SQLITE_OK) {
-        return Item(itemId, title, position, item.getTimestamp()); // use the old timestamp.
+    if (result == SQLITE_OK && sqlite3_changes(database) == 1) {
+        return Item(itemId, title, position, ""); // do I need to get the old timestamp here?
+                                                  // it would require another select query...
     }
 
     return {};
@@ -276,38 +317,48 @@ void BoardRepository::createDummyData() {
     handleSQLError(result, errorMessage);
 }
 
+int BoardRepository::allItemsCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    if (data && fieldValues) {
+        auto items = static_cast<vector<Item> *>(data);
+
+        items->emplace_back(stoi(fieldValues[0]), fieldValues[1], stoi(fieldValues[2]), fieldValues[3]);
+    }
+
+    return 0;
+}
+
+int BoardRepository::allColumnsCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
+    if (data && fieldValues) {
+        auto columns = static_cast<vector<Column> *>(data);
+
+        columns->emplace_back(stoi(fieldValues[0]), fieldValues[1], stoi(fieldValues[2]));
+    }
+
+    return 0;
+}
+
 int BoardRepository::itemCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
-    if (data) {
+    if (data && fieldValues) {
         auto item = static_cast<Item *>(data);
 
         item->setID(stoi(fieldValues[0]));
         item->setTitle(fieldValues[1]);
-        item->setTimestamp(fieldValues[2]);
-        item->setPos(stoi(fieldValues[3]));
+        item->setTimestamp(fieldValues[3]);
+        cout << "hallo: " << fieldValues[3] << endl;
+        item->setPos(stoi(fieldValues[2]));
     }
 
     return 0;
 }
 
 int BoardRepository::columnCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
-    if (data) {
+    if (data && fieldValues) {
         auto column = static_cast<Column *>(data);
 
-        Item item = {
-            stoi(fieldValues[0]),
-            fieldValues[1],
-            stoi(fieldValues[3]),
-            fieldValues[2]};
-
-        column->addItem(item);
+        column->setID(stoi(fieldValues[0]));
+        column->setName(fieldValues[1]);
+        column->setPos(stoi(fieldValues[2]));
     }
-
-    return 0;
-}
-
-int BoardRepository::selectAmountCallback(void *data, int numberOfColumns, char **fieldValues, char **columnNames) {
-    int *c = static_cast<int *>(data);
-    *c = atoi(fieldValues[0]);
 
     return 0;
 }
