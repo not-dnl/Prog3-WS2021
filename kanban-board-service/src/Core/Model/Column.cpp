@@ -2,6 +2,9 @@
 
 using namespace Prog3::Core::Model;
 
+Column::Column()
+    : id(-1) {}
+
 Column::Column(int id, std::string givenName, int givenPosition)
     : id(id), name(givenName), position(givenPosition) {}
 
