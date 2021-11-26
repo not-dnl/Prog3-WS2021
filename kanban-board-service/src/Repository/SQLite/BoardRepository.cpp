@@ -70,7 +70,7 @@ void BoardRepository::initialize() {
 }
 
 Board BoardRepository::getBoard() {
-    Board board("Kanban Board");
+    Board board(boardTitle);
     board.setColumns(getColumns());
 
     return board;
@@ -80,7 +80,7 @@ std::vector<Column> BoardRepository::getColumns() {
     int result = 0;
     char *errorMessage = nullptr;
 
-    string sqlSelectColumns = "select * from column";
+    string sqlSelectColumns = "select * from column order by position";
     vector<Column> columns;
 
     result = sqlite3_exec(database, sqlSelectColumns.c_str(), allColumnsCallback, &columns, &errorMessage);
@@ -189,7 +189,7 @@ std::vector<Item> BoardRepository::getItems(int columnId) {
 
     string sqlSelectItems = "select id, title, position, date from item "
                             "where column_id = " +
-                            std::to_string(columnId);
+                            std::to_string(columnId) + " order by position";
     std::vector<Item> items;
 
     result = sqlite3_exec(database, sqlSelectItems.c_str(), allItemsCallback, &items, &errorMessage);
